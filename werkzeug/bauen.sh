@@ -168,6 +168,17 @@ for datei in PrivacyInfo.xcprivacy Assets.car Probe; do
 done
 plutil -lint "$APP/PrivacyInfo.xcprivacy" || rot "PrivacyInfo.xcprivacy ist kein gueltiges Plist"
 if ls build/Probe.xcarchive/dSYMs/*.dSYM > /dev/null 2>&1; then echo "ok: dSYM im Archiv"; else rot "kein dSYM im Archiv"; fi
+# Welcher Zweig aus RegieController.registriereTvFuerIPadOS27 im Programm steckt (E6): der Text der
+# Registrierung nur mit Swift 6.4 (Xcode 27), sonst der Hinweis „Compiler vor Swift 6.4".
+if grep -a -q "TV registriert" "$APP/Probe"; then
+  WEG27="im Bau (Swift 6.4 oder neuer)"
+elif grep -a -q "Compiler vor Swift 6.4" "$APP/Probe"; then
+  WEG27="nicht im Bau (Compiler vor Swift 6.4)"
+else
+  WEG27="unbekannt"
+  rot "Weg fuer iPadOS 27: keiner der beiden Texte im Programm"
+fi
+echo "Weg fuer iPadOS 27: $WEG27"
 echo "::endgroup::"
 halt_bei_rot "Pruefung des Archivs rot"
 
@@ -177,5 +188,6 @@ halt_bei_rot "Pruefung des Archivs rot"
   echo "- Baunummer: \`$BUILD\`"
   echo "- Xcode: \`$PROBE_XCODE\`"
   echo "- Bundle-ID: \`$BUNDLE_ID\`"
+  echo "- Weg fuer iPadOS 27: $WEG27"
 } >> "$ZUSAMMENFASSUNG"
 echo "Archiv geprueft: Bau $BUILD, $PROBE_XCODE"
