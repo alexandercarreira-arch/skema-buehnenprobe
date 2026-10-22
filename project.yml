@@ -1,0 +1,46 @@
+# Probe S1-H: Projektbeschreibung fuer XcodeGen 2.46.0 (Bauzettel 45, E2 bis E8).
+# Das Xcode-Projekt entsteht in jedem Lauf neu und liegt nie im Repo.
+name: Probe
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: FTZZJQT9QX
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Probe:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Probe
+        excludes:
+          - PrivacyInfo.xcprivacy
+      - path: Probe/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: Probe
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.alexandercarreira-arch.skema-buehnenprobe
+        INFOPLIST_FILE: Probe/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: "NO"
+        # Wird im Lauf auf die erste Zeile von `xcodebuild -version` gesetzt und landet als
+        # ProbeXcode in der Info.plist (Testbild und Log zeigen, womit gebaut wurde).
+        PROBE_XCODE: lokal
+schemes:
+  Probe:
+    build:
+      targets:
+        Probe: all
+    run:
+      config: Debug
+    archive:
+      config: Release
