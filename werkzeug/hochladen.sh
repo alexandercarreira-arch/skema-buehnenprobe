@@ -20,12 +20,16 @@ ZUSAMMENFASSUNG="${GITHUB_STEP_SUMMARY:-/dev/null}"
 : "${ASC_KEY_ID:?}" "${ASC_ISSUER_ID:?}" "${ASC_KEY_P8:?}" "${BUILD:?}" "${PROBE_XCODE:?}"
 mkdir -p "$LOGS" "$ROH"
 
+# Schwaerzt Zertifikatsnamen („Apple Distribution: Vorname Name (TEAMID)"), Mail-Adressen, Teamnamen
+# und jeden Wert eines Schluessels, der auf „name" endet (teamName, displayName, firstName, ...).
 schwaerze() {
   sed -E \
     -e 's/((Apple|iPhone|iOS) (Distribution|Development|Developer)|Developer ID Application): [^()"]*\(/\1: <Name> (/g' \
     -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<Mail>/g' \
-    -e 's/([Tt]eam( [Nn]ame)?:? *)"[^"]*"/\1"<Team>"/g' \
-    -e "s/([Tt]eam( [Nn]ame)?:? *)'[^']*'/\\1'<Team>'/g"
+    -e 's/([A-Za-z]*[Nn]ame"?[[:space:]]*[:=][[:space:]]*)"[^"]*"/\1"<Name>"/g' \
+    -e 's/([A-Za-z]*[Nn]ame"?[[:space:]]*=[[:space:]]*)[^";,}]+/\1<Name>/g' \
+    -e 's/([Tt]eam:? *)"[^"]*"/\1"<Team>"/g' \
+    -e "s/([Tt]eam:? *)'[^']*'/\\1'<Team>'/g"
 }
 
 # Nur Zeilen mit Fehlern, Warnungen und Ergebnis, geschwaerzt, ohne Doppelte, hoechstens 150.
@@ -135,7 +139,10 @@ mkdir -p "$ROH/ipa"
 unzip -q "$IPA" -d "$ROH/ipa"
 IPA_APP="$ROH/ipa/Payload/Probe.app"
 plutil -p "$IPA_APP/Info.plist" > "$LOGS/ipa-info.txt"
-codesign -d --entitlements - --xml "$IPA_APP" > "$ROH/entitlements.plist" 2> /dev/null
+if ! codesign -d --entitlements - --xml "$IPA_APP" > "$ROH/entitlements.plist"; then
+  echo "::error::codesign liest die Entitlements des IPA nicht"
+  exit 1
+fi
 plutil -p "$ROH/entitlements.plist" > "$LOGS/ipa-entitlements.txt"
 cat "$LOGS/ipa-entitlements.txt"
 FEHLER=0
