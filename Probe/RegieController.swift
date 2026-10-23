@@ -11,6 +11,7 @@ final class RegieController: UIViewController, UITextFieldDelegate {
     private let adressFeld = UITextField()
     private var inhaltKnoepfe: [(TvInhalt, UIButton)] = []
     private var wachKnopf: UIButton?
+    private var overscanKnopf: UIButton?
     private var logSchalter: UIButton?
     private let logAnsicht = UITextView()
     private var logHoehe: NSLayoutConstraint?
@@ -44,6 +45,11 @@ final class RegieController: UIViewController, UITextFieldDelegate {
         }
         wachKnopf = wach
         leiste.addArrangedSubview(wach)
+        let overscan = macheKnopf("Overscan") { [weak self] in
+            self?.schalteOverscan()
+        }
+        overscanKnopf = overscan
+        leiste.addArrangedSubview(overscan)
 
         adressFeld.text = Zustand.shared.adresse
         adressFeld.borderStyle = .roundedRect
@@ -157,6 +163,13 @@ final class RegieController: UIViewController, UITextFieldDelegate {
         Zustand.shared.wach.toggle()
     }
 
+    /// Reihum none, scale, insetBounds; wirkt live am Bildschirm der TV-Szene, ohne die Buehne neu zu laden.
+    private func schalteOverscan() {
+        let neu = Zustand.shared.naechsterOverscan()
+        Protokoll.shared.schreibe("Knopf: Overscan \(overscanText(neu))")
+        Zustand.shared.overscan = neu
+    }
+
     @objc private func zustandGeaendert() {
         zeigeZustand()
     }
@@ -168,6 +181,11 @@ final class RegieController: UIViewController, UITextFieldDelegate {
         }
         setzeStil(wachKnopf, aktiv: zustand.wach)
         setzeStil(logSchalter, aktiv: logOffen)
+        if let knopf = overscanKnopf {
+            var stil = UIButton.Configuration.gray()
+            stil.title = "Overscan \(overscanText(zustand.overscan))"
+            knopf.configuration = stil
+        }
         #if compiler(>=6.4)
         if #available(iOS 27.0, *), let registrierung = tvRegistrierung as? UISceneAccessoryRegistration {
             registrierung.isEnabled = zustand.tvInhalt != .aus

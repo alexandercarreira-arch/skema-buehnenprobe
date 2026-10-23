@@ -179,12 +179,3 @@ private final class SchwachesZiel: NSObject {
         ziel?.tick()
     }
 }
-
-private func overscanText(_ art: UIScreen.OverscanCompensation) -> String {
-    switch art {
-    case .scale: return "scale"
-    case .insetBounds: return "insetBounds"
-    case .none: return "none"
-    @unknown default: return "unbekannt"
-    }
-}

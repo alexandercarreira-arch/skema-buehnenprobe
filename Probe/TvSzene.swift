@@ -21,7 +21,25 @@ final class TvSzene: UIResponder, UIWindowSceneDelegate {
         Protokoll.shared.schreibe("Szene verbunden: TV (\(session.configuration.name ?? "ohne Namen"), Rolle \(session.role.rawValue)), Bildschirm \(groesse(bildschirm.bounds.size)) pt, scale \(zahl(bildschirm.scale)), Zustand \(zustandText(windowScene.activationState))")
         Zustand.shared.setzeTvSzene(zustandText(windowScene.activationState))
         NotificationCenter.default.addObserver(self, selector: #selector(zustandGeaendert), name: Zustand.geaendert, object: nil)
+        // Vor dem ersten Fenster, bei jedem Verbinden und Wiederverbinden (jede Verbindung ist eine neue Szene).
+        wendeOverscanAn("beim Verbinden")
         wendeInhaltAn()
+    }
+
+    /// Setzt `overscanCompensation` am Bildschirm der Szene auf den gewaehlten Wert. Apple: „For an external
+    /// screen, this property sets the desired technique to compensate for overscan"; `.scale` skaliert den
+    /// fertigen Framebuffer, `.insetBounds` verkleinert die Bounds, `.none` skaliert nicht.
+    private func wendeOverscanAn(_ anlass: String) {
+        guard let windowScene = szene else {
+            return
+        }
+        let bildschirm = windowScene.screen
+        let vorher = bildschirm.overscanCompensation
+        let soll = Zustand.shared.overscan
+        if vorher != soll {
+            bildschirm.overscanCompensation = soll
+        }
+        Protokoll.shared.schreibe("TV Overscan \(overscanText(vorher)) → \(overscanText(bildschirm.overscanCompensation)) (\(anlass)): \(bildschirmText(bildschirm, fenster: window))")
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -54,6 +72,9 @@ final class TvSzene: UIResponder, UIWindowSceneDelegate {
     }
 
     @objc private func zustandGeaendert() {
+        if szene?.screen.overscanCompensation != Zustand.shared.overscan {
+            wendeOverscanAn("Knopf")
+        }
         wendeInhaltAn()
     }
 
@@ -119,6 +140,7 @@ final class TvController: UIViewController {
     private var inhalt: UIView?
     private let status = UILabel()
     private var takt: Takt?
+    private var letzteBildschirmZeile = ""
 
     override func loadView() {
         let grund = UIView()
@@ -143,9 +165,17 @@ final class TvController: UIViewController {
         }
     }
 
-    /// Jede Groessenaenderung der Buehne ins Log (nur Wechsel, WebAnsicht.messeGeometrie).
+    /// Jede Aenderung von Bildschirm und Fenster (etwa nach dem Umschalten des Overscan) und jede
+    /// Groessenaenderung der Buehne ins Log, jeweils nur Wechsel.
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        if let fenster = view.window, let bildschirm = fenster.windowScene?.screen {
+            let zeile = bildschirmText(bildschirm, fenster: fenster)
+            if zeile != letzteBildschirmZeile {
+                letzteBildschirmZeile = zeile
+                Protokoll.shared.schreibe("TV Bildschirm (Layout): \(zeile)")
+            }
+        }
         if let buehne = Zustand.shared.buehneWeb, inhalt === buehne.webView {
             buehne.messeGeometrie("Layout am TV")
         }

@@ -89,6 +89,26 @@ final class Zustand {
         }
     }
 
+    /// Ausgleich fuer Overscan am Bildschirm der TV-Szene. Standard `.none`: Mit `.scale` (gemessener
+    /// Ausgangswert, Bau 12.1) skaliert iPadOS den ganzen Framebuffer, das Bild endet vor der Panel-Kante
+    /// (Geraetebefund 23.10.). Der Knopf „Overscan" schaltet reihum.
+    var overscan: UIScreen.OverscanCompensation = .none {
+        didSet {
+            guard overscan != oldValue else { return }
+            Protokoll.shared.schreibe("Overscan gewählt: \(overscanText(overscan))")
+            NotificationCenter.default.post(name: Zustand.geaendert, object: nil)
+        }
+    }
+
+    /// Reihenfolge des Knopfs: none, scale, insetBounds, wieder none.
+    func naechsterOverscan() -> UIScreen.OverscanCompensation {
+        switch overscan {
+        case .none: return .scale
+        case .scale: return .insetBounds
+        default: return .none
+        }
+    }
+
     /// Basisadresse der Web-App, in `UserDefaults` gemerkt (Grund CA92.1 im Datenschutz-Manifest).
     var adresse: String {
         get { UserDefaults.standard.string(forKey: Zustand.adressSchluessel) ?? Zustand.standardAdresse }
@@ -211,6 +231,27 @@ func rechteck(_ wert: CGRect) -> String {
 /// Raender in der Reihenfolge oben, links, unten, rechts.
 func raender(_ wert: UIEdgeInsets) -> String {
     "o \(zahl(wert.top)) l \(zahl(wert.left)) u \(zahl(wert.bottom)) r \(zahl(wert.right))"
+}
+
+func overscanText(_ art: UIScreen.OverscanCompensation) -> String {
+    switch art {
+    case .scale: return "scale"
+    case .insetBounds: return "insetBounds"
+    case .none: return "none"
+    @unknown default: return "unbekannt"
+    }
+}
+
+/// Bildschirm der TV-Szene fuer das Log: bounds, nativeBounds, scale, Overscan mit Insets, Fenster mit safeArea.
+@MainActor
+func bildschirmText(_ bildschirm: UIScreen, fenster: UIWindow?) -> String {
+    var text = "bounds \(groesse(bildschirm.bounds.size)) nativeBounds \(groesse(bildschirm.nativeBounds.size)) scale \(zahl(bildschirm.scale)), Overscan \(overscanText(bildschirm.overscanCompensation)) Insets \(raender(bildschirm.overscanCompensationInsets))"
+    if let fenster {
+        text += ", Fenster \(rechteck(fenster.bounds)) safeArea \(raender(fenster.safeAreaInsets))"
+    } else {
+        text += ", ohne Fenster"
+    }
+    return text
 }
 
 func kurz(_ text: String, _ grenze: Int = 200) -> String {
