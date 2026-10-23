@@ -119,6 +119,12 @@ final class RegieController: UIViewController, UITextFieldDelegate {
         aktualisiereLog()
     }
 
+    /// Jede Groessenaenderung der Regie ins Log (nur Wechsel, WebAnsicht.messeGeometrie).
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        web?.messeGeometrie("Layout Regie")
+    }
+
     // MARK: Leiste
 
     private func macheKnopf(_ titel: String, aktion: @escaping () -> Void) -> UIButton {

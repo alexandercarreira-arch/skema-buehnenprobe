@@ -76,7 +76,10 @@ final class TvSzene: UIResponder, UIWindowSceneDelegate {
             testbild = bild
             ziel.zeige(bild, mitStatus: false)
         case .buehne:
-            ziel.zeige(Zustand.shared.buehne().webView, mitStatus: true)
+            let buehne = Zustand.shared.buehne()
+            ziel.zeige(buehne.webView, mitStatus: true)
+            ziel.view.layoutIfNeeded()
+            buehne.messeGeometrie("am TV angehängt", erzwungen: true)
         case .aus:
             break
         }
@@ -137,6 +140,14 @@ final class TvController: UIViewController {
         ])
         takt = Takt(intervall: 1) { [weak self] in
             self?.aktualisiereStatus()
+        }
+    }
+
+    /// Jede Groessenaenderung der Buehne ins Log (nur Wechsel, WebAnsicht.messeGeometrie).
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if let buehne = Zustand.shared.buehneWeb, inhalt === buehne.webView {
+            buehne.messeGeometrie("Layout am TV")
         }
     }
 

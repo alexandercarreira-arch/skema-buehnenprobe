@@ -203,6 +203,16 @@ func groesse(_ wert: CGSize) -> String {
     "\(zahl(wert.width)) × \(zahl(wert.height))"
 }
 
+/// Rechteck als „x,y B × H".
+func rechteck(_ wert: CGRect) -> String {
+    "\(zahl(wert.minX)),\(zahl(wert.minY)) \(groesse(wert.size))"
+}
+
+/// Raender in der Reihenfolge oben, links, unten, rechts.
+func raender(_ wert: UIEdgeInsets) -> String {
+    "o \(zahl(wert.top)) l \(zahl(wert.left)) u \(zahl(wert.bottom)) r \(zahl(wert.right))"
+}
+
 func kurz(_ text: String, _ grenze: Int = 200) -> String {
     text.count > grenze ? String(text.prefix(grenze)) + "…" : text
 }

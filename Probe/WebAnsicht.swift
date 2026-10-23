@@ -11,8 +11,13 @@ enum WebRolle: String {
 
 /// Eine der beiden WKWebViews (Bauzettel 45, § 3.4 und § 3.5). Beide nutzen den Standard-Datenspeicher
 /// und dieselben Einstellungen wie Capacitor, damit P3, P8 und P9 die WebView der spaeteren Huelle messen.
+/// Dazu gehoert auch die Scroll-Ansicht: Capacitor setzt `contentInsetAdjustmentBehavior = .never`,
+/// `bounces = false` und schaltet das Zoomen ab (CAPInstanceDescriptor.m:39-45,
+/// CAPBridgeViewController.swift:301-323). Ohne `.never` kann UIKit die sicheren Raender des Fensters als
+/// Inhaltsraender um die Seite legen (Vermutung zum Geraetebefund 23.10., Buehne mit schwarzem Rand am TV;
+/// `messeGeometrie` schreibt die Raender von Fenster, WebView und Scroll-Ansicht ins Log).
 @MainActor
-final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, UIScrollViewDelegate {
     let rolle: WebRolle
     let webView: WKWebView
 
@@ -26,6 +31,8 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
     private var minutenRafSumme = 0
     private var minutenRafMin = Int.max
     private var takt: Takt?
+    private var letzteGeometrieNativ = ""
+    private var letzteGeometrieSeite = ""
 
     init(rolle: WebRolle) {
         self.rolle = rolle
@@ -45,6 +52,9 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isInspectable = true
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.bounces = false
+        webView.scrollView.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(adresseGeaendert), name: Zustand.adresseGeaendert, object: nil)
         takt = Takt(intervall: 1) { [weak self] in
             self?.pruefeStille()
@@ -93,6 +103,69 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
         return "\(rolle.rawValue) rAF Mittel \(minutenRafSumme / minutenMeldungen)/s, min \(minutenRafMin)/s, \(minutenMeldungen) Meldungen, \(sichtbarkeit)"
     }
 
+    // MARK: Geometrie (Geraetebefund 23.10.)
+
+    /// Misst die Geometrie nativ (Fenster, View, WebView, Scroll-Ansicht) und, wenn sie sich geaendert hat
+    /// oder `erzwungen` gilt, auch in der Seite. Protokolliert nur Wechsel.
+    func messeGeometrie(_ anlass: String, erzwungen: Bool = false) {
+        let nativ = nativeGeometrie()
+        guard erzwungen || nativ != letzteGeometrieNativ else {
+            return
+        }
+        letzteGeometrieNativ = nativ
+        Protokoll.shared.schreibe("\(rolle.rawValue) Geometrie nativ (\(anlass)): \(nativ)")
+        messeSeite(anlass, erzwungen: erzwungen)
+    }
+
+    /// Misst in der Seite: innerWidth/innerHeight, devicePixelRatio, visualViewport, documentElement,
+    /// screen, env(safe-area-inset-*), Canvas (CSS, Pixel, getBoundingClientRect), Rand des body.
+    func messeSeite(_ anlass: String, erzwungen: Bool = false) {
+        webView.evaluateJavaScript(WebAnsicht.geometrieSkript) { [weak self] ergebnis, fehler in
+            let text: String
+            if let fehler {
+                text = "nicht messbar: \(fehlerText(fehler))"
+            } else {
+                text = ergebnis as? String ?? "kein Text"
+            }
+            self?.meldeSeite(text, anlass: anlass, erzwungen: erzwungen)
+        }
+    }
+
+    private func meldeSeite(_ text: String, anlass: String, erzwungen: Bool) {
+        guard erzwungen || text != letzteGeometrieSeite else {
+            return
+        }
+        letzteGeometrieSeite = text
+        Protokoll.shared.schreibe("\(rolle.rawValue) Geometrie Seite (\(anlass)): \(text)")
+    }
+
+    private func nativeGeometrie() -> String {
+        let scroll = webView.scrollView
+        var teile: [String] = []
+        if let fenster = webView.window {
+            teile.append("Fenster \(rechteck(fenster.bounds)) safeArea \(raender(fenster.safeAreaInsets))")
+            if let bildschirm = fenster.windowScene?.screen {
+                teile.append("Bildschirm \(groesse(bildschirm.bounds.size)) scale \(zahl(bildschirm.scale))")
+            }
+        } else {
+            teile.append("ohne Fenster")
+        }
+        if let oben = webView.superview {
+            teile.append("View \(rechteck(oben.bounds)) safeArea \(raender(oben.safeAreaInsets))")
+        }
+        teile.append("WebView frame \(rechteck(webView.frame)) safeArea \(raender(webView.safeAreaInsets)) displayScale \(zahl(webView.traitCollection.displayScale))")
+        teile.append("scrollView Verhalten \(verhaltenText(scroll.contentInsetAdjustmentBehavior)) contentInset \(raender(scroll.contentInset)) adjusted \(raender(scroll.adjustedContentInset))")
+        teile.append("contentSize \(groesse(scroll.contentSize)) contentOffset \(zahl(scroll.contentOffset.x)),\(zahl(scroll.contentOffset.y)) zoom \(zahl(scroll.zoomScale)) min \(zahl(scroll.minimumZoomScale)) max \(zahl(scroll.maximumZoomScale))")
+        return teile.joined(separator: "; ")
+    }
+
+    // MARK: UIScrollViewDelegate
+
+    /// Zoomen aus wie in Capacitor (`zoomEnabled` false): die erste Pinch-Geste schaltet die Erkennung ab.
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        scrollView.pinchGestureRecognizer?.isEnabled = false
+    }
+
     // MARK: Meldungen des eingespielten Skripts
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -110,6 +183,9 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
             Protokoll.shared.schreibe("\(rolle.rawValue) JS-Fehler: \(kurz(daten["text"] as? String ?? "?")) \(daten["ort"] as? String ?? "")")
         case "paket":
             Protokoll.shared.schreibe("\(rolle.rawValue) Paket: \(daten["namen"] as? String ?? "?") (\(kurz(daten["adresse"] as? String ?? "?")))")
+            messeSeite("Seite geladen", erzwungen: true)
+        case "groesse":
+            messeSeite("resize in der Seite")
         default:
             Protokoll.shared.schreibe("\(rolle.rawValue): unbekannte Meldung \(art)")
         }
@@ -164,6 +240,7 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Protokoll.shared.schreibe("\(rolle.rawValue) geladen: \(kurz(webView.url?.absoluteString ?? "?"))")
+        messeGeometrie("geladen", erzwungen: true)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -230,9 +307,53 @@ final class WebAnsicht: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
             }
             melde({ art: "paket", namen: namen.length ? namen.join(", ") : "kein assets/index-*.js", adresse: String(location.href) });
           });
+          function meldeGroesse() { melde({ art: "groesse" }); }
+          window.addEventListener("resize", meldeGroesse);
+          if (window.visualViewport) { window.visualViewport.addEventListener("resize", meldeGroesse); }
         })();
         """
     }
+
+    /// Liefert die Geometrie der Seite als eine Zeile Text (fuer `evaluateJavaScript`).
+    private static let geometrieSkript = """
+        (function () {
+          function z(wert) { return Math.round(wert * 100) / 100; }
+          var teile = [];
+          teile.push("inner " + window.innerWidth + "×" + window.innerHeight + " dpr " + window.devicePixelRatio);
+          var vv = window.visualViewport;
+          if (vv) {
+            teile.push("visualViewport " + z(vv.width) + "×" + z(vv.height) + " scale " + z(vv.scale) + " offset " + z(vv.offsetLeft) + "," + z(vv.offsetTop));
+          }
+          var de = document.documentElement;
+          teile.push("client " + de.clientWidth + "×" + de.clientHeight + " scroll " + de.scrollWidth + "×" + de.scrollHeight + " bei " + z(window.scrollX) + "," + z(window.scrollY));
+          teile.push("screen " + window.screen.width + "×" + window.screen.height);
+          var meta = document.querySelector("meta[name=viewport]");
+          teile.push('viewport "' + (meta ? meta.getAttribute("content") : "keiner") + '"');
+          var probe = document.createElement("div");
+          probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+          de.appendChild(probe);
+          var ps = window.getComputedStyle(probe);
+          teile.push("env safe-area o " + ps.paddingTop + " l " + ps.paddingLeft + " u " + ps.paddingBottom + " r " + ps.paddingRight);
+          de.removeChild(probe);
+          var leinwand = document.querySelector("canvas.buehne") || document.querySelector("canvas");
+          if (leinwand) {
+            var r = leinwand.getBoundingClientRect();
+            teile.push("canvas." + (leinwand.className || "ohneKlasse") + " css " + (leinwand.style.width || "?") + "×" + (leinwand.style.height || "?") + " px " + leinwand.width + "×" + leinwand.height + " rect " + z(r.left) + "," + z(r.top) + " " + z(r.width) + "×" + z(r.height));
+          } else {
+            teile.push("kein canvas");
+          }
+          var haupt = document.querySelector("main");
+          if (haupt) {
+            var h = haupt.getBoundingClientRect();
+            teile.push("main." + haupt.className.split(" ").join(".") + " rect " + z(h.left) + "," + z(h.top) + " " + z(h.width) + "×" + z(h.height));
+          }
+          if (document.body) {
+            var bs = window.getComputedStyle(document.body);
+            teile.push("body margin " + bs.margin + " background " + bs.backgroundColor);
+          }
+          return teile.join("; ");
+        })();
+        """
 }
 
 /// Haelt den Empfaenger der Skript-Meldungen schwach; `WKUserContentController` haelt seine Boten stark.
@@ -267,6 +388,16 @@ private func navigationTypText(_ typ: WKNavigationType) -> String {
     case .reload: return "reload"
     case .formResubmitted: return "formResubmitted"
     case .other: return "other"
+    @unknown default: return "unbekannt"
+    }
+}
+
+private func verhaltenText(_ verhalten: UIScrollView.ContentInsetAdjustmentBehavior) -> String {
+    switch verhalten {
+    case .automatic: return "automatic"
+    case .scrollableAxes: return "scrollableAxes"
+    case .never: return "never"
+    case .always: return "always"
     @unknown default: return "unbekannt"
     }
 }

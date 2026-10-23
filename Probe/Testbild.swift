@@ -106,8 +106,8 @@ final class Testbild: UIView {
         zeilen.append("preferredMode \(bevorzugt)")
         let modi = bildschirm.availableModes.map { groesse($0.size) }.joined(separator: ", ")
         zeilen.append("availableModes \(modi.isEmpty ? "keine" : modi)")
-        let rand = bildschirm.overscanCompensationInsets
-        zeilen.append("Overscan \(overscanText(bildschirm.overscanCompensation)), Insets \(zahl(rand.top)) \(zahl(rand.left)) \(zahl(rand.bottom)) \(zahl(rand.right))")
+        zeilen.append("Overscan \(overscanText(bildschirm.overscanCompensation)), Insets \(raender(bildschirm.overscanCompensationInsets))")
+        zeilen.append("safeArea Fenster \(raender(window?.safeAreaInsets ?? .zero)), Testbild \(raender(safeAreaInsets))")
         zeilen.append("maximumFramesPerSecond \(bildschirm.maximumFramesPerSecond), gemessen \(gemessen) Bilder/s, Zähler \(bilderGesamt)")
         zeilen.append("Uhr \(uhr.string(from: jetzt))")
         zeilen.append("Szene \(Zustand.shared.tvSzenenZustand) seit \(Protokoll.shared.uhrzeit(Zustand.shared.tvSzenenSeit))")
